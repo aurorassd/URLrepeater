@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URLリピーターツール</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1000px;
+            margin: auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .url-section {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        .url-section legend {
+            font-weight: bold;
+            padding: 0 10px;
+            color: #555;
+        }
+        .form-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            min-width: 120px; /* ラベル幅を揃える */
+            margin-right: 10px;
+        }
+        .form-group input[type="url"],
+        .form-group input[type="number"],
+        .form-group select {
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            flex-grow: 1; /* 入力欄が伸びるように */
+            min-width: 150px; /* 最小幅 */
+        }
+         .form-group input[type="number"] {
+             width: 80px; /* 数値入力の幅を調整 */
+             flex-grow: 0;
+         }
+        .form-group input[type="checkbox"] {
+            margin-left: 5px;
+            transform: scale(1.2);
+        }
+        .form-group.inline-group label {
+            min-width: auto; /* インライン要素のラベル幅 */
+            margin-right: 5px;
+        }
+        .form-group.inline-group {
+             margin-right: 20px; /* オプション間のスペース */
+        }
+        .button-group {
+            margin-top: 15px;
+            text-align: right;
+        }
+        .button-group button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-left: 10px;
+            transition: background-color 0.3s ease;
+        }
+        .start-button {
+            background-color: #28a745;
+            color: white;
+        }
+        .start-button:hover {
+            background-color: #218838;
+        }
+        .start-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .stop-button {
+            background-color: #dc3545;
+            color: white;
+        }
+        .stop-button:hover {
+            background-color: #c82333;
+        }
+        .stop-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .warning ul {
+            margin-top: 0;
+            margin-bottom: 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>URLリピーターツール</h1>
+
+        <div class="warning">
+            <strong>注意:</strong>
+            <ul>
+                <li>セキュリティ上の理由 (クロスオリジンポリシー) により、このツールから開いた別ドメインのWebページの<strong>拡大率</strong>や<strong>スクロール位置</strong>を自動的に制御することは通常できません。これらの設定は無視される可能性があります。</li>
+                <li>同様に、タブの<strong>更新</strong>や<strong>再オープン</strong>も、ページのドメインやブラウザの設定によっては機能しない場合があります。</li>
+                <li>ポップアップブロッカーが有効な場合、タブが正常に開かないことがあります。このサイトのポップアップを許可する必要があるかもしれません。</li>
+                 <li>「閉じて開き直す」オプションは、スクリプトによって最初に開かれたタブに対してのみ機能します。</li>
+            </ul>
+        </div>
+
+        <!-- URL設定セクション (最大6つ) -->
+        <div id="url-sections-container">
+            <!-- JavaScriptでセクションを生成 -->
+        </div>
+    </div>
+
+    <script>
+        const MAX_URLS = 6;
+        const urlConfigs = []; // 各URLの設定と状態を保持する配列
+        const urlSectionsContainer = document.getElementById('url-sections-container');
+
+        // --- 初期化 ---
+        function initialize() {
+            for (let i = 0; i < MAX_URLS; i++) {
+                // 設定オブジェクトの初期化
+                urlConfigs.push({
+                    url: '',
+                    method: 'newTab', // 'newTab', 'reload', 'reopen'
+                    repeat: false,
+                    interval: 30, // seconds
+                    zoom: 100, // percentage
+                    scroll: 0, // pixels
+                    timerId: null,
+                    windowRef: null,
+                    isRunning: false
+                });
+
+                // HTML要素の生成
+                const section = document.createElement('fieldset');
+                section.classList.add('url-section');
+                section.innerHTML = `
+                    <legend>URL ${i + 1}</legend>
+                    <div class="form-group">
+                        <label for="url-${i}">URL:</label>
+                        <input type="url" id="url-${i}" placeholder="https://example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>開く方法:</label>
+                        <div class="form-group inline-group">
+                           <input type="radio" id="method-newTab-${i}" name="method-${i}" value="newTab" checked>
+                           <label for="method-newTab-${i}">新しいタブ</label>
+                        </div>
+                         <div class="form-group inline-group">
+                           <input type="radio" id="method-reload-${i}" name="method-${i}" value="reload">
+                           <label for="method-reload-${i}">更新</label>
+                        </div>
+                         <div class="form-group inline-group">
+                           <input type="radio" id="method-reopen-${i}" name="method-${i}" value="reopen">
+                           <label for="method-reopen-${i}">閉じて開き直す</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="repeat-${i}">繰り返し実行:</label>
+                        <input type="checkbox" id="repeat-${i}">
+                    </div>
+                    <div class="form-group">
+                        <label for="interval-${i}">実行間隔 (秒):</label>
+                        <input type="number" id="interval-${i}" value="30" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="zoom-${i}">拡大率 (%):</label>
+                        <input type="number" id="zoom-${i}" value="100" min="10">
+                    </div>
+                    <div class="form-group">
+                        <label for="scroll-${i}">スクロール量 (px):</label>
+                        <input type="number" id="scroll-${i}" value="0" min="0">
+                    </div>
+                    <div class="button-group">
+                        <button class="start-button" id="start-btn-${i}" data-index="${i}">開始</button>
+                        <button class="stop-button" id="stop-btn-${i}" data-index="${i}" disabled>停止</button>
+                    </div>
+                `;
+                urlSectionsContainer.appendChild(section);
+            }
+
+            // イベントリスナーの設定
+            urlSectionsContainer.addEventListener('click', (event) => {
+                const target = event.target;
+                if (target.classList.contains('start-button')) {
+                    const index = parseInt(target.dataset.index, 10);
+                    startProcessing(index);
+                } else if (target.classList.contains('stop-button')) {
+                    const index = parseInt(target.dataset.index, 10);
+                    stopProcessing(index);
+                }
+            });
+        }
+
+        // --- コアロジック ---
+
+        function startProcessing(index) {
+            if (urlConfigs[index].isRunning) return; // 既に実行中なら何もしない
+
+            const config = urlConfigs[index];
+            const urlInput = document.getElementById(`url-${index}`);
+            const methodRadios = document.getElementsByName(`method-${index}`);
+            const repeatCheckbox = document.getElementById(`repeat-${index}`);
+            const intervalInput = document.getElementById(`interval-${index}`);
+            const zoomInput = document.getElementById(`zoom-${index}`);
+            const scrollInput = document.getElementById(`scroll-${index}`);
+            const startButton = document.getElementById(`start-btn-${index}`);
+            const stopButton = document.getElementById(`stop-btn-${index}`);
+
+            // 設定値の読み込みと検証
+            config.url = urlInput.value.trim();
+            if (!config.url) {
+                alert(`URL ${index + 1}: URLを入力してください。`);
+                return;
+            }
+             try {
+                new URL(config.url); // URL形式の簡易チェック
+            } catch (_) {
+                 alert(`URL ${index + 1}: 無効なURL形式です。`);
+                 return;
+            }
+
+
+            for (const radio of methodRadios) {
+                if (radio.checked) {
+                    config.method = radio.value;
+                    break;
+                }
+            }
+            config.repeat = repeatCheckbox.checked;
+            config.interval = parseInt(intervalInput.value, 10);
+            config.zoom = parseInt(zoomInput.value, 10);
+            config.scroll = parseInt(scrollInput.value, 10);
+
+            if (isNaN(config.interval) || config.interval < 1) {
+                alert(`URL ${index + 1}: 実行間隔は1以上の数値を入力してください。`);
+                return;
+            }
+            if (isNaN(config.zoom) || config.zoom < 10) {
+                alert(`URL ${index + 1}: 拡大率は10以上の数値を入力してください。`);
+                return;
+            }
+             if (isNaN(config.scroll) || config.scroll < 0) {
+                alert(`URL ${index + 1}: スクロール量は0以上の数値を入力してください。`);
+                return;
+            }
+
+
+            console.log(`[URL ${index + 1}] 開始:`, config);
+
+            // 最初のタブを開く
+            openTab(index);
+
+            // 繰り返し処理の設定
+            if (config.repeat && (config.method === 'reload' || config.method === 'reopen')) {
+                 if (config.timerId) { // 念のため既存のタイマーをクリア
+                    clearInterval(config.timerId);
+                 }
+                config.timerId = setInterval(() => {
+                    console.log(`[URL ${index + 1}] 繰り返し実行 (${config.method})`);
+                    if (config.method === 'reload') {
+                        reloadTab(index);
+                    } else if (config.method === 'reopen') {
+                        reopenTab(index);
+                    }
+                }, config.interval * 1000);
+            }
+
+            // 状態更新とUI変更
+            config.isRunning = true;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+             // 他のフィールドも無効化 (任意)
+            urlInput.disabled = true;
+            // methodRadios.forEach(r => r.disabled = true); // ラジオボタンも無効化する場合
+            repeatCheckbox.disabled = true;
+            intervalInput.disabled = true;
+            zoomInput.disabled = true;
+            scrollInput.disabled = true;
+        }
+
+        function stopProcessing(index) {
+            const config = urlConfigs[index];
+            if (!config.isRunning) return; // 実行中でなければ何もしない
+
+            console.log(`[URL ${index + 1}] 停止`);
+
+            // タイマーをクリア
+            if (config.timerId) {
+                clearInterval(config.timerId);
+                config.timerId = null;
+            }
+
+            // タブを閉じる試行 (ユーザーが手動で閉じていた場合などは失敗する)
+            if (config.windowRef && !config.windowRef.closed) {
+                try {
+                    config.windowRef.close();
+                    console.log(`[URL ${index + 1}] タブを閉じました。`);
+                } catch (e) {
+                    console.warn(`[URL ${index + 1}] タブを閉じる際にエラーが発生しました:`, e.message);
+                }
+            }
+            config.windowRef = null;
+
+             // 状態更新とUI変更
+            config.isRunning = false;
+            const startButton = document.getElementById(`start-btn-${index}`);
+            const stopButton = document.getElementById(`stop-btn-${index}`);
+            startButton.disabled = false;
+            stopButton.disabled = true;
+
+             // 他のフィールドを再度有効化
+             document.getElementById(`url-${index}`).disabled = false;
+             document.getElementById(`repeat-${index}`).disabled = false;
+             document.getElementById(`interval-${index}`).disabled = false;
+             document.getElementById(`zoom-${index}`).disabled = false;
+             document.getElementById(`scroll-${index}`).disabled = false;
+
+        }
+
+        function openTab(index) {
+             const config = urlConfigs[index];
+             if (!config.url) return;
+
+             try {
+                // 既存のウィンドウ参照があれば閉じる (reopenの場合に備える)
+                if (config.windowRef && !config.windowRef.closed) {
+                     try {
+                         config.windowRef.close();
+                     } catch (e) {
+                         console.warn(`[URL ${index + 1}] 既存タブを閉じる際にエラー:`, e.message);
+                     }
+                }
+
+                config.windowRef = window.open(config.url, `url_repeater_${index}_${Date.now()}`); // 一意の名前を付ける
+                 if (config.windowRef) {
+                    console.log(`[URL ${index + 1}] 新しいタブを開きました: ${config.url}`);
+                    // 開いたタブにフォーカスを当てる (オプション)
+                    // config.windowRef.focus();
+
+                    // 読み込み完了後にズームとスクロールを試行
+                    config.windowRef.onload = () => {
+                        console.log(`[URL ${index + 1}] タブ読み込み完了、ズーム/スクロール適用試行`);
+                        applyZoomAndScroll(config.windowRef, config.zoom, config.scroll, index);
+                    };
+                     // onloadが発火しない場合（クロスオリジンなど）も考慮し、少し待ってから試すことも可能
+                     setTimeout(() => {
+                        if (config.windowRef && !config.windowRef.closed) {
+                             applyZoomAndScroll(config.windowRef, config.zoom, config.scroll, index);
+                        }
+                     }, 1000); // 1秒待つ
+
+                 } else {
+                    console.error(`[URL ${index + 1}] タブを開けませんでした。ポップアップブロッカーを確認してください。`);
+                    alert(`URL ${index + 1}: タブを開けませんでした。ポップアップブロッカーが有効になっている可能性があります。`);
+                    stopProcessing(index); // 開始できなかったので停止状態に戻す
+                 }
+             } catch (e) {
+                 console.error(`[URL ${index + 1}] タブを開く際にエラーが発生しました:`, e);
+                 alert(`URL ${index + 1}: タブを開く際にエラーが発生しました: ${e.message}`);
+                 stopProcessing(index); // エラー発生時も停止
+             }
+        }
+
+        function reloadTab(index) {
+            const config = urlConfigs[index];
+            if (!config.windowRef || config.windowRef.closed) {
+                console.warn(`[URL ${index + 1}] 更新対象のタブが存在しないか、閉じられています。再度開きます。`);
+                openTab(index); // タブがなければ開き直す
+                return;
+            }
+            try {
+                config.windowRef.location.reload();
+                console.log(`[URL ${index + 1}] タブを更新しました。`);
+                // 更新後にもズーム/スクロールが必要な場合、再度適用を試みる
+                 config.windowRef.onload = () => {
+                    console.log(`[URL ${index + 1}] 更新後のタブ読み込み完了、ズーム/スクロール適用試行`);
+                    applyZoomAndScroll(config.windowRef, config.zoom, config.scroll, index);
+                 };
+                 setTimeout(() => {
+                    if (config.windowRef && !config.windowRef.closed) {
+                        applyZoomAndScroll(config.windowRef, config.zoom, config.scroll, index);
+                    }
+                 }, 1000);
+
+            } catch (e) {
+                console.warn(`[URL ${index + 1}] タブの更新中にエラーが発生しました (クロスオリジン制限の可能性):`, e.message);
+                 // エラーが発生した場合、タブを開き直すフォールバック
+                 console.log(`[URL ${index + 1}] 更新に失敗したため、タブを開き直します。`);
+                 openTab(index);
+            }
+        }
+
+        function reopenTab(index) {
+             const config = urlConfigs[index];
+             console.log(`[URL ${index + 1}] タブを再オープンします。`);
+             // 現在のタブを閉じる試行 (失敗しても続行)
+            if (config.windowRef && !config.windowRef.closed) {
+                try {
+                    config.windowRef.close();
+                     console.log(`[URL ${index + 1}] 既存のタブを閉じました。`);
+                } catch (e) {
+                    console.warn(`[URL ${index + 1}] 既存タブを閉じる際にエラー:`, e.message);
+                }
+            }
+             // 新しいタブを開く
+            openTab(index);
+        }
+
+        function applyZoomAndScroll(windowRef, zoomPercent, scrollTop, index) {
+             if (!windowRef || windowRef.closed) return;
+
+             try {
+                // ズーム適用 (クロスオリジンでは通常失敗)
+                // window.document.body.style.zoom は非標準であり、クロスオリジンでは機能しない
+                // 代替案として transform: scale() も考えられるが同様に制限される
+                 const zoomLevel = zoomPercent / 100;
+                 // windowRef.document.body.style.zoom = zoomLevel; // これは機能しない可能性が高い
+                 console.log(`[URL ${index + 1}] ズーム適用試行: ${zoomPercent}% (クロスオリジン制限により失敗する可能性あり)`);
+                  // 代わりにCSS transformを試す (これも通常失敗)
+                 // windowRef.document.body.style.transform = `scale(${zoomLevel})`;
+                 // windowRef.document.body.style.transformOrigin = 'top left';
+
+             } catch (e) {
+                 console.warn(`[URL ${index + 1}] ズーム適用中にエラー (予期されるクロスオリジン制限):`, e.message);
+             }
+
+             try {
+                 // スクロール適用 (クロスオリジンでは通常失敗)
+                 windowRef.scrollTo(0, scrollTop);
+                 console.log(`[URL ${index + 1}] スクロール適用試行: ${scrollTop}px (クロスオリジン制限により失敗する可能性あり)`);
+             } catch (e) {
+                 console.warn(`[URL ${index + 1}] スクロール適用中にエラー (予期されるクロスオリジン制限):`, e.message);
+             }
+        }
+
+
+        // --- 初期化実行 ---
+        document.addEventListener('DOMContentLoaded', initialize);
+
+    </script>
+</body>
+</html>
